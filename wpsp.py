@@ -68,29 +68,11 @@ class WP_Profiler:
             if dict_index < result_count - 1:
                 print("|{:<25}|{:<25}|{}".format(dict_ref['name'], dict_ref['value'], dict_ref['extra']))
 
-        # Code below seems to be deprecated
-        '''for index, item in enumerate(result_list):
-            if temp_counter < result_count + 1:
-                line = '| '.join(str(x).ljust(30) for x in item)
-                if index == 0:
-                    print ('-' * len(line))
-                print (line)
-                if index == 0:
-                    print ('-' * len(line))
-                temp_counter += 1
-                if index == temp_result_len - 1:
-                    print ('-' * len(line))
-
-            else:
-                break
-        print ("\n")'''
-
     def profiler_run(self, type, request):
         # The idea behind this function is to install the WP Profiler module for WP Cli and run an automated test with it
         # Since Python 2.4.3 does not support the 'subprocess.check_output' function I used the 'subprocess.Popen' one
         # Since the WP Profile module for WP Cli does not work properly with PHP 7+ I'll instead we use it with PHP Cli 5.6
         # Not sure what implications this may have but from what I can see it completes the test properly
-        print("\n\033[1;33;49m---- WP Cli Profiler Results ----\033[1;37;49m")
 
         if type is "stage":
             # If there is a request then we list only the specified stage
@@ -123,12 +105,22 @@ class WP_Profiler:
         results_dict = []
 
         for i in range(0, len(temp_list)-3, 3):
-            temp = {
-                'name': temp_list[i],
-                'value': temp_list[i+1],
-                'extra': temp_list[i+2]
-            }
-            results_dict.append(temp)
+            if i >= 3 < len(temp_list) - 3:
+                # Comment needed
+                timing = re.sub('s', '', temp_list[i+1])
+                temp = {
+                    'name': temp_list[i],
+                    'value': float(timing),
+                    'extra': temp_list[i+2]
+                }
+                results_dict.append(temp)
+            else:
+                temp = {
+                    'name': temp_list[i],
+                    'value': temp_list[i + 1],
+                    'extra': temp_list[i + 2]
+                }
+                results_dict.append(temp)
 
         # Finally we return the result list
         return results_dict
@@ -137,8 +129,8 @@ class WP_Profiler:
     def analytics(self, cli_args):
         # Self note: Pass the cli arugments with the "sys.argv[1:]" method
 
-        seconds = 1
-        count = 10
+        seconds = 0.5
+        count = 5
 
         # Handling cli arguments
         # The 's' character stands for seconds and 'c' for count
@@ -147,29 +139,98 @@ class WP_Profiler:
         try:
             opts, args = getopt.getopt(cli_args, "hs:c:", ["seconds=", "count="])
         except getopt.GetoptError:
-            print 'Usage: wpsp.py -s <integer> -c <integer>'
+            print 'Usage: wpsp.py -s <float> -c <integer>'
             sys.exit(2)
         for opt, arg in opts:
             if opt == '-h':
-                print 'Usage: wpsp.py -s <integer> -c <integer>'
-                print '-s | --seconds \tTells the script to search for results above N seconds'
-                print '-c | --count \tTells the script to print only N number of results'
+                print 'Usage: wpsp.py -s <float> -c <integer>'
+                print '-s | --seconds \tTells the script to search for results above N seconds. Default: 0.5'
+                print '-c | --count \tTells the script to print only N number of results. Default: 5'
                 sys.exit()
             elif opt in ("-s", "--seconds"):
-                seconds = arg
+                seconds = float(arg)
             elif opt in ("-c", "--count"):
-                count = arg
+                if int(arg) < 5:
+                    count = 5
+                else:
+                    count = int(arg)
 
+        profiler_stage_all = self.profiler_run("stage", "")
+        results_stages_all = []
 
+        # Comment needed
+        for index, dict in enumerate(profiler_stage_all):
+            if dict['value'] >= seconds:
+                if "total" in dict['name']:
+                    pass
+                else:
+                    results_stages_all.append(dict)
+            else:
+                pass
+
+        results_stages_N = []
+        results_hooks_N = []
+
+        # If the initial results have entries that take more than N seconds to load
+        if len(results_stages_all) > 0:
+
+            # Comment needed
+            for item in results_stages_all:
+                profiler_stage = self.profiler_run("stage", item['name'])
+                for index, dict in enumerate(profiler_stage):
+                    if len(dict) > 0:
+                        if dict['value'] >= seconds:
+                            if "total" in dict['name']:
+                                pass
+                            else:
+                                results_stages_N.append(dict)
+
+            # Comment needed
+            if len(results_stages_N) > 0:
+                for item in results_stages_N:
+                    profiler_hook = self.profiler_run("hook", item['name'])
+                    #print "Test: ", profiler_hook
+                    for dict in profiler_hook:
+                        #print dict['name'], dict['value'], dict['extra']
+                        if dict['value'] >= seconds:
+                            if "total" not in dict['name']:
+                                results_hooks_N.append(dict)
+                    if len(results_hooks_N) <= 1:
+                        print "\n > Profiler found no hooks that take longer than [", seconds  ,"] seconds to load."
+                        temp_count = 0
+                        for dict in profiler_hook:
+                            if temp_count <= count:
+                                if "total" not in dict['name']:
+                                    temp_count += 1
+                                    results_hooks_N.append(dict)
+                            else:
+                                break
+            else:
+                print("\n\t" + "#" * 30 + "\n\tThe WP Cli Profiler results returned no entries above [" + seconds + "]"
+                      + "\n\tor one of the website's plugins cause the Profiler to malfunction"
+                      + "\n\t" + "#" * 30)
+                sys.exit()
+
+            # Comment needed
+            print("\n\033[1;33;49m---- WP Cli Profiler Results ----\033[1;37;49m")
+            print"\nStages that take longer than [", seconds, "] seconds to load:"
+            self.profiler_results_print(results_stages_all, result_count=count)
+            print "-" * 50
+            print"Hooks that take longer than [", seconds, "] seconds to load:"
+            self.profiler_results_print(results_hooks_N, result_count=count)
+        else:
+            # There's no point in running the other tests
+            print("\n\t" + "#" * 30 + "\n\tThe WP Cli Profiler results returned no entries above [" + seconds + "]"
+                  + "\n\tor one of the website's plugins cause the Profiler to malfunction"
+                  + "\n\t" + "#" * 30)
+            sys.exit()
 
 
 if __name__ == '__main__':
 
-    newwp = WP_Profiler()
-    results = newwp.profiler_run("stage", "")
-    newwp.profiler_results_print(results)
-    #print("The results are: ", results)
-
+    profiler_instance = WP_Profiler()
+    print("\n\033[1;31;49m---- Running WP Cli Profiler ----\033[1;37;49m")
+    profiler_instance.analytics(sys.argv[1:])
 
     # Here we handle exceptions
 
