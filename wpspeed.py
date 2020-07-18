@@ -39,6 +39,8 @@ class wp_cli():
         print temp_list [-2]
 
 
+    # Function seems to be deprecated
+    # The self.wp_cli_profiler_results variable is not used
     def wp_cli_profiler_results_get(self):
         temp_list = []
         for index, item in enumerate(self.wp_cli_profiler_results):
@@ -54,6 +56,26 @@ class wp_cli():
                     temp_list.append(item)
         return temp_list
 
+
+    def wp_cli_result_print(self, result_list):
+        # Not having Python 2.7+ on all our servers really, really sucks :(
+        temp_counter = 0
+        temp_result_len = len(result_list)
+        for i, d in enumerate(result_list):
+            if temp_counter < __result_count__ + 1:
+                line = '| '.join(str(x).ljust(50) for x in d)
+                if i == 0:
+                    print ('-' * len(line))
+                print (line)
+                if i == 0:
+                    print ('-' * len(line))
+                temp_counter += 1
+                if i == temp_result_len - 1:
+                    print ('-' * len(line))
+
+            else:
+                break
+        print ("\n")
 
 
     def wp_cli_profiler_run(self, type, request):
@@ -93,27 +115,9 @@ class wp_cli():
 
         # Then we crete a list of lists - each internal list contains three rows - the callback, time and location
         results_list = [temp_list[i:i + 3] for i in range(0, len(temp_list), 3)]
-        self.wp_cli_profiler_results = results_list
 
-        # Finally we print the number of results set with the '__result_count__' variable in an okay-ish table
-        # Also, not having Python 2.7+ on all our servers really, really sucks :(
-        temp_counter = 0
-        temp_result_len = len(results_list)
-        for i, d in enumerate(results_list):
-            if temp_counter < __result_count__ + 1:
-                line = '| '.join(str(x).ljust(50) for x in d)
-                if i == 0:
-                    print ('-' * len(line))
-                print (line)
-                if i == 0:
-                    print ('-' * len(line))
-                temp_counter += 1
-                if i == temp_result_len - 1:
-                    print ('-' * len(line))
-
-            else:
-                break
-        print ("\n")
+        # Finally we return the result list
+        return results_list
 
 
 

@@ -2,4 +2,4 @@
 
 
 1. Remove the PageSpeed test section
-2.
+2. Build a system to review the profiler results and generate new ones with details and recommendations
