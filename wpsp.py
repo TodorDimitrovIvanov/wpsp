@@ -1,10 +1,7 @@
 import getopt
 import sys
 import subprocess
-import urllib2
 import re
-import traceback
-from time import sleep
 from subprocess import Popen, PIPE
 from urllib import URLopener
 
@@ -130,7 +127,7 @@ class WP_Profiler:
         # Self note: Pass the cli arugments with the "sys.argv[1:]" method
 
         seconds = 0.5
-        count = 5
+        count = 10
 
         # Handling cli arguments
         # The 's' character stands for seconds and 'c' for count
@@ -145,7 +142,7 @@ class WP_Profiler:
             if opt == '-h':
                 print 'Usage: wpsp.py -s <float> -c <integer>'
                 print '-s | --seconds \tTells the script to search for results above N seconds. Default: 0.5'
-                print '-c | --count \tTells the script to print only N number of results. Default: 5'
+                print '-c | --count \tTells the script to print only N number of results. Default: 10'
                 sys.exit()
             elif opt in ("-s", "--seconds"):
                 seconds = float(arg)
@@ -168,8 +165,8 @@ class WP_Profiler:
             else:
                 pass
 
-        results_stages_N = []
         results_hooks_N = []
+        results_callbacks_N = []
 
         # If the initial results have entries that take more than N seconds to load
         if len(results_stages_all) > 0:
@@ -183,26 +180,26 @@ class WP_Profiler:
                             if "total" in dict['name']:
                                 pass
                             else:
-                                results_stages_N.append(dict)
+                                results_hooks_N.append(dict)
 
             # Comment needed
-            if len(results_stages_N) > 0:
-                for item in results_stages_N:
+            if len(results_hooks_N) > 0:
+                for item in results_hooks_N:
                     profiler_hook = self.profiler_run("hook", item['name'])
-                    #print "Test: ", profiler_hook
                     for dict in profiler_hook:
-                        #print dict['name'], dict['value'], dict['extra']
                         if dict['value'] >= seconds:
                             if "total" not in dict['name']:
-                                results_hooks_N.append(dict)
-                    if len(results_hooks_N) <= 1:
-                        print "\n > Profiler found no hooks that take longer than [", seconds  ,"] seconds to load."
+                                results_callbacks_N.append(dict)
+                    # Comment needed
+                    if len(results_callbacks_N) <= 1:
+                        print "\n> Profiler found no callbacks that take longer than [", seconds  ,"] seconds to load." \
+                               "\n> The script will still display the callbacks that take the longest to load"
                         temp_count = 0
                         for dict in profiler_hook:
                             if temp_count <= count:
                                 if "total" not in dict['name']:
                                     temp_count += 1
-                                    results_hooks_N.append(dict)
+                                    results_callbacks_N.append(dict)
                             else:
                                 break
             else:
@@ -210,14 +207,19 @@ class WP_Profiler:
                       + "\n\tor one of the website's plugins cause the Profiler to malfunction"
                       + "\n\t" + "#" * 30)
                 sys.exit()
+            # End of 'if len(results_hooks_N) > 0' block
+
 
             # Comment needed
             print("\n\033[1;33;49m---- WP Cli Profiler Results ----\033[1;37;49m")
-            print"\nStages that take longer than [", seconds, "] seconds to load:"
+            print"\n> Stages that take longer than [", seconds, "] seconds to load:"
             self.profiler_results_print(results_stages_all, result_count=count)
             print "-" * 50
-            print"Hooks that take longer than [", seconds, "] seconds to load:"
-            self.profiler_results_print(results_hooks_N, result_count=count)
+            for stage in results_stages_all:
+                if "hook" not in stage['name']:
+                    print"> Hooks within [\033[1;31;49m", stage['name'],"\033[1;37;49m] that take longer than [", seconds, "] seconds to load:"
+                    self.profiler_results_print(results_hooks_N, result_count=count)
+                    print "-" * 50
         else:
             # There's no point in running the other tests
             print("\n\t" + "#" * 30 + "\n\tThe WP Cli Profiler results returned no entries above [" + seconds + "]"
