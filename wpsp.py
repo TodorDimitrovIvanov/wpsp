@@ -51,9 +51,7 @@ class WP_Profiler:
                     temp_list.append(item)
         return temp_list
 
-    def profiler_results_print(self, result_list, **kwargs):
-        temp_counter = 0
-
+    def profiler_result_print_multiple(self, result_list, **kwargs):
         # Comment needed
         result_count = 10
 
@@ -61,9 +59,44 @@ class WP_Profiler:
             if key is "result_count":
                 result_count = value
 
-        for dict_index, dict_ref in enumerate(result_list):
-            if dict_index < result_count - 1:
-                print("|{:<25}|{:<25}|{}".format(dict_ref['name'], dict_ref['value'], dict_ref['extra']))
+        for index, dict in enumerate(result_list):
+            name = dict.get('name')
+            value = dict.get('value')
+            extra = dict.get('extra')
+            if index <= result_count:
+                print("|{:<25}|{:<25}|{}".format(name, value, extra))
+
+    def profiler_result_print_single(self, result_list, target, **kwargs):
+        # Comment needed
+        result_count = 10
+
+        for key, value in kwargs.items():
+            if key is "result_count":
+                result_count = value
+
+        for index, item in enumerate(result_list):
+            if index <= result_count:
+                if item['name'] is target:
+                    name = item.get('name')
+                    value = item.get('value')
+                    extra = item.get('extra')
+                    print("|{:<25}|{:<25}|{}".format(name, value, extra))
+
+    def profiler_result_print_by_parent(self, result_list, parent, **kwargs):
+        # Comment needed
+        result_count = 10
+
+        for key, value in kwargs.items():
+            if key is "result_count":
+                result_count = value
+
+        for index, item in enumerate(result_list):
+            if item['parent'] is parent:
+                if index <= result_count:
+                    name = item.get('name')
+                    value = item.get('value')
+                    extra = item.get('extra')
+                    print("|{:<25}|{:<25}|{}".format(name, value, extra))
 
     def profiler_run(self, type, request):
         # The idea behind this function is to install the WP Profiler module for WP Cli and run an automated test with it
@@ -80,7 +113,7 @@ class WP_Profiler:
                 command = "/usr/local/php56/bin/php-cli wp-cli.phar profile stage  --spotlight --order=DESC --orderby=time --fields=stage,time,cache_ratio  --skip-plugins=sg-cachepress"
         if type is "hook":
             if request != "":
-                command = "/usr/local/php56/bin/php-cli wp-cli.phar profile " + request + " --all --spotlight --order=DESC --orderby=time --fields=callback,time,location  --skip-plugins=sg-cachepress"
+                command = "/usr/local/php56/bin/php-cli wp-cli.phar profile hook " + request + " --all --spotlight --order=DESC --orderby=time --fields=callback,time,location  --skip-plugins=sg-cachepress"
             if request is "":
                 command = "/usr/local/php56/bin/php-cli wp-cli.phar profile hook --all --spotlight --order=DESC --orderby=time --fields=callback,time,location  --skip-plugins=sg-cachepress"
 
@@ -106,6 +139,7 @@ class WP_Profiler:
                 # Comment needed
                 timing = re.sub('s', '', temp_list[i+1])
                 temp = {
+                    'parent': '',
                     'name': temp_list[i],
                     'value': float(timing),
                     'extra': temp_list[i+2]
@@ -113,6 +147,7 @@ class WP_Profiler:
                 results_dict.append(temp)
             else:
                 temp = {
+                    'parent': '',
                     'name': temp_list[i],
                     'value': temp_list[i + 1],
                     'extra': temp_list[i + 2]
@@ -171,57 +206,78 @@ class WP_Profiler:
         # If the initial results have entries that take more than N seconds to load
         if len(results_stages_all) > 0:
 
-            # Comment needed
-            for item in results_stages_all:
-                profiler_stage = self.profiler_run("stage", item['name'])
-                for index, dict in enumerate(profiler_stage):
-                    if len(dict) > 0:
-                        if dict['value'] >= seconds:
-                            if "total" in dict['name']:
-                                pass
-                            else:
-                                results_hooks_N.append(dict)
-
-            # Comment needed
-            if len(results_hooks_N) > 0:
-                for item in results_hooks_N:
-                    profiler_hook = self.profiler_run("hook", item['name'])
-                    for dict in profiler_hook:
-                        if dict['value'] >= seconds:
-                            if "total" not in dict['name']:
-                                results_callbacks_N.append(dict)
-                    # Comment needed
-                    if len(results_callbacks_N) <= 1:
-                        print "\n> Profiler found no callbacks that take longer than [", seconds  ,"] seconds to load." \
-                               "\n> The script will still display the callbacks that take the longest to load"
-                        temp_count = 0
-                        for dict in profiler_hook:
-                            if temp_count <= count:
+            # Here we iterate over the results from the 'results_stages_all' list.
+            # This means that we run the profiler for all of the stages and save the results that took more than N seconds to load.
+            # Lastly, we store the results along with the stage name within the 'results_hooks_N' list
+            for stage in results_stages_all:
+                # Ensuring that the stage takes longer than N seconds to load
+                # And that the resulting table's header is not included
+                if "stage" not in stage['name']:
+                    # Here we start another profiler test with the stage that we want to test
+                    profiler_stage = self.profiler_run("stage", stage['name'])
+                    for index, dict in enumerate(profiler_stage):
+                        if len(dict) > 0:
+                            if dict['value'] >= seconds:
                                 if "total" not in dict['name']:
-                                    temp_count += 1
+                                    # Here we save the name of the stage we tested within the hook results dictionary
+                                    dict['parent'] = stage['name']
+                                    results_hooks_N.append(dict)
+
+            # Here we iterate over the results from the 'results_hooks_N' list.
+            # This means that we run the profiler on all of the hooks that take more than N seconds to load.
+            # Lastly we store the results along with the name of the hook within the 'results_callbacks_N' list.
+            if len(results_hooks_N) > 0:
+                # The 'results_hooks_N' list now consists of list like this [ stage_name, result_hook_dict ]
+                for hook in results_hooks_N:
+                    if "hook" not in hook['name']:
+                        # Here we start another profiler test with the hook that we want to test
+                        profiler_hook = self.profiler_run("hook", hook['name'])
+                        for dict in profiler_hook:
+                            if dict['value'] >= seconds:
+                                if "total" not in dict['name']:
+                                    # Here we save the name of the hook we tested within the callback results dictionary
+                                    dict['parent'] = hook['name']
                                     results_callbacks_N.append(dict)
-                            else:
-                                break
+                if len(results_callbacks_N) <= 1:
+                    print "\n> Profiler found no callbacks that take longer than [", seconds, "] seconds to load." \
+                          "\n> The script will still display the callbacks that take the longest to load"
             else:
                 print("\n\t" + "#" * 30 + "\n\tThe WP Cli Profiler results returned no entries above [" + seconds + "]"
                       + "\n\tor one of the website's plugins cause the Profiler to malfunction"
                       + "\n\t" + "#" * 30)
+
                 sys.exit()
             # End of 'if len(results_hooks_N) > 0' block
 
 
-            # Comment needed
+            # Here we check if the operator has selected the option to save the results
+            # If yes then we generate a wp-cli-profiler-results-DATE.json file
+            # Otherwise we skip this part over
+            # CODE NEEDED BELLOW!!!!!!!!!!!!!
+
+            # Here we print the results from the tests that we run above
             print("\n\033[1;33;49m---- WP Cli Profiler Results ----\033[1;37;49m")
+            # First we print the stages that took longer than N seconds to load
             print"\n> Stages that take longer than [", seconds, "] seconds to load:"
-            self.profiler_results_print(results_stages_all, result_count=count)
+            self.profiler_result_print_multiple(results_stages_all, result_count=count)
             print "-" * 50
+            # Then we print the hooks that took longer than N seconds to load
+
             for stage in results_stages_all:
-                if "hook" not in stage['name']:
-                    print"> Hooks within [\033[1;31;49m", stage['name'],"\033[1;37;49m] that take longer than [", seconds, "] seconds to load:"
-                    self.profiler_results_print(results_hooks_N, result_count=count)
+                if "stage" not in stage['name']:
+                    # Comment needed
+                    print"\n> Hooks within [\033[1;31;49m", stage['name'], "\033[1;37;49m] stage that take longer than [", seconds, "] seconds to load:"
+                    self.profiler_result_print_by_parent(results_hooks_N, stage['name'], result_count=count)
+
+                    for hook in results_hooks_N:
+                        if hook['parent'] is stage['name'] and "hook" not in hook['name']:
+                            # Comment needed
+                            print "> Callbacks within [\033[1;31;49m", hook['name'], "\033[1;37;49m] hook in [\033[1;31;49m", stage['name'], "\033[1;37;49m] stage that take longer than [", seconds, "] seconds to load:"
+                            self.profiler_result_print_by_parent(results_callbacks_N, hook['name'], result_count=count)
                     print "-" * 50
         else:
-            # There's no point in running the other tests
+            # If there are no stages that took longer than N seconds to load
+            # Then there's no point in running the other tests
             print("\n\t" + "#" * 30 + "\n\tThe WP Cli Profiler results returned no entries above [" + seconds + "]"
                   + "\n\tor one of the website's plugins cause the Profiler to malfunction"
                   + "\n\t" + "#" * 30)
