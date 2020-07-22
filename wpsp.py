@@ -138,17 +138,18 @@ class WP_Profiler:
 
     def profiler_run(self, type, request):
         # The idea behind this function is to install the WP Profiler module for WP Cli and run an automated test with it
-        # Since Python 2.4.3 does not support the 'subprocess.check_output' function I used the 'subprocess.Popen' one
         # Since the WP Profile module for WP Cli does not work properly with PHP 7+ I'll instead we use it with PHP Cli 5.6
         # Not sure what implications this may have but from what I can see it completes the test properly
 
         if type is "stage":
             # If there is a request then we list only the specified stage
-            if request != "" or "--skip-plugins" in request:
+            if request != "" in request:
                 command = "/usr/local/php56/bin/php-cli wp-cli.phar profile stage " + request + " --spotlight --order=DESC --orderby=time --fields=hook,time,cache_ratio --skip-plugins=sg-cachepress"
             # If there is no request then we set all stages to be listed
             if request is "":
                 command = "/usr/local/php56/bin/php-cli wp-cli.phar profile stage  --spotlight --order=DESC --orderby=time --fields=stage,time,cache_ratio  --skip-plugins=sg-cachepress"
+            if "--skip-plugins" in request:
+                command = "/usr/local/php56/bin/php-cli wp-cli.phar profile stage  --spotlight --order=DESC --orderby=time --fields=stage,time,cache_ratio " + request + ",sg-cachepress"
         if type is "hook":
             if request != "":
                 command = "/usr/local/php56/bin/php-cli wp-cli.phar profile hook " + request + " --all --spotlight --order=DESC --orderby=time --fields=callback,time,location  --skip-plugins=sg-cachepress"
@@ -169,6 +170,7 @@ class WP_Profiler:
 
         results_dict = []
 
+        # Comment needed
         for i in range(0, len(temp_list)-3, 3):
             if i >= 3 < len(temp_list) - 3:
                 # Comment needed
@@ -227,10 +229,7 @@ class WP_Profiler:
         # Comment needed
         for index, dict in enumerate(profiler_stage_all):
             if dict['value'] >= seconds:
-                if "total" in dict['name']:
-                    pass
-                else:
-                    results_stages_all.append(dict)
+                results_stages_all.append(dict)
             else:
                 pass
 
@@ -251,10 +250,9 @@ class WP_Profiler:
                     for index, dict in enumerate(profiler_stage):
                         if len(dict) > 0:
                             if dict['value'] >= seconds:
-                                if "total" not in dict['name']:
-                                    # Here we save the name of the stage we tested within the hook results dictionary
-                                    dict['parent'] = stage['name']
-                                    results_hooks_N.append(dict)
+                                # Here we save the name of the stage we tested within the hook results dictionary
+                                dict['parent'] = stage['name']
+                                results_hooks_N.append(dict)
 
             # Here we iterate over the results from the 'results_hooks_N' list.
             # This means that we run the profiler on all of the hooks that take more than N seconds to load.
@@ -267,20 +265,9 @@ class WP_Profiler:
                     profiler_hook = self.profiler_run("hook", hook['name'])
                     for dict in profiler_hook:
                         if dict['value'] >= seconds:
-                            if "total" not in dict['name']:
-                                # Here we save the name of the hook we tested within the callback results dictionary
-                                dict['parent'] = hook['name']
-                                results_callbacks_N.append(dict)
-            '''if len(results_callbacks_N) <= 1:
-                print "\n> Profiler found no callbacks that take longer than [", seconds, "] seconds to load." \
-                      "\n> The script will still display the callbacks that take the longest to load"
-            else:
-                print("\n\t" , "#" * 30 , "\n\tThe WP Cli Profiler results returned no entries above [" , seconds , "]"
-                      , "\n\tor one of the website's plugins cause the Profiler to malfunction"
-                      , "\n\t" + "#" * 30)
-
-                sys.exit()'''
-            # End of 'if len(results_hooks_N) > 0' block
+                            # Here we save the name of the hook we tested within the callback results dictionary
+                            dict['parent'] = hook['name']
+                            results_callbacks_N.append(dict)
 
             # Here we check if the operator has selected the option to save the results
             # If yes then we generate a wp-cli-profiler-results-DATE.json file
@@ -296,17 +283,19 @@ class WP_Profiler:
             # Then we print the hooks that took longer than N seconds to load
 
             for stage in results_stages_all:
-                if "stage" not in stage['name']:
-                    # Comment needed
-                    print"\n> Hooks within [\033[1;31;49m", stage['name'], "\033[1;37;49m] stage that take longer than [", seconds, "] seconds to load:"
-                    self.profiler_result_print_by_parent(results_hooks_N, stage['name'], result_count=count)
+                if "total" not in stage['name']:
+                    if "stage" not in stage['name']:
+                        # Comment needed
+                        print"\n> Hooks within [\033[1;31;49m", stage['name'], "\033[1;37;49m] stage that take longer than [", seconds, "] seconds to load:"
+                        self.profiler_result_print_by_parent(results_hooks_N, stage['name'], result_count=count)
 
-                    for hook in results_hooks_N:
-                        if hook['parent'] is stage['name'] and "hook" not in hook['name']:
-                            # Comment needed
-                            print "\n> Callbacks within [\033[1;31;49m", hook['name'], "\033[1;37;49m] hook in [\033[1;31;49m", stage['name'], "\033[1;37;49m] stage that take longer than [", seconds, "] seconds to load:"
-                            self.profiler_result_print_by_parent(results_callbacks_N, hook['name'], result_count=count)
-                    print "-" * 100
+                        for hook in results_hooks_N:
+                            if "total" not in hook['name']:
+                                if hook['parent'] is stage['name'] and "hook" not in hook['name']:
+                                    # Comment needed
+                                    print "\n> Callbacks within [\033[1;31;49m", hook['name'], "\033[1;37;49m] hook in [\033[1;31;49m", stage['name'], "\033[1;37;49m] stage that take longer than [", seconds, "] seconds to load:"
+                                    self.profiler_result_print_by_parent(results_callbacks_N, hook['name'], result_count=count)
+                                    print "-" * 100
         else:
             # If there are no stages that took longer than N seconds to load
             # Then there's no point in running the other tests
@@ -326,12 +315,12 @@ class WP_Profiler:
         count = 10
         # The 'active_plugins_list' list consists of the active plugins on the website
         active_plugins_list = []
-        # The 'baseline_test' list consists of result dictionaries from running the Profiler
+        # The 'profiler_plugins_baseline_results' list consists of result dictionaries from running the Profiler
         # Without skipping any plugins
-        baseline_test = []
-        # The 'plugins_test' list consists of result dictionaries from running the Profiler
+        profiler_plugins_baseline_results = []
+        # The 'profiler_plugins_test_results' list consists of result dictionaries from running the Profiler
         # By skipping a plugin on each third iteration
-        plugins_test = []
+        profiler_plugins_test_results = []
 
         # Handling cli arguments
         # The 's' character stands for seconds and 'c' for count
@@ -359,49 +348,60 @@ class WP_Profiler:
         # Here we populate the list of active plugins on the website.
         active_plugins_list = self.wp_cli_plugin_list_get()
 
-        # Here we run a baseline test three times so we can later on use the average
-        # This is because the Profiler results are inconsistent due to something
-        # Could be server's CPU load, not sure
-        for index in range(3):
-            temp_dict = self.profiler_run("stage", "")
-            baseline_test.append(temp_dict)
-
         print("\n\033[1;33;49m---- WP CLI-Profiler plugin by plugin test ----\033[1;37;49m\n")
 
         # Here we run a test three times for each skipped plugin
         # This way we can later use the averages of these tests to make recommendations
         for index, plugin in enumerate(active_plugins_list):
-            # Here we generate a loading bar
+
+            # Here we generate the loading bar
             message = "Testing [\033[1;31;49m" + plugin + "\033[1;37;49m] plugin."
             self.analytics_generate_loading_bar(index, len(active_plugins_list), message)
-            # Here we create a for cycle that runs three times
-            #for i in range(3):
-                # And each time we run a Profiler test by skipping the 'plugin'
+
+            # Here we prepare the command request that is passed to the Profiler
             request = "--skip-plugins=" + plugin
-            temp_list = self.profiler_run("stage", request)
-            for temp_temp_dict in temp_list:
-                if type(temp_temp_dict['value']) is float and temp_temp_dict['value'] >= seconds:
-                    temp_temp_dict['parent'] = plugin
-                    plugins_test.append(temp_temp_dict)
+            profiler_plugin_result_list = self.profiler_run("stage", request)
+
+            # Here we run a baseline test three times so we can later on use the average
+            # This is because the Profiler results are inconsistent due to something
+            # Could be server's CPU load, not sure
+            for i in range(3):
+                i = self.profiler_run("stage", "")
+                for element in i:
+                    if "total" in element['name']:
+                        element['parent'] = plugin
+                        profiler_plugins_baseline_results.append(element)
+
+            # Then we loop through the resulting list and _______
+            # The 'temp_list' is a list of dictionaries returned from the 'profiler_run' method
+            # Each dictionary within the list contains the name, value, extra and parent keys and values
+            for element in profiler_plugin_result_list:
+                # For each dict in the 'temp_list' list
+                if type(element['value']) is float and element['value'] >= seconds and "total" in element['name']:
+                    # Here we assign a parent to each dict so we can track the test results
+                    # The 'parent' value of the dict is the name of the plugin from the
+                    element['parent'] = plugin
+                    profiler_plugins_test_results.append(element)
         self.analytics_generate_loading_bar(1, 1, "Done")
 
         # Comment needed
-        baseline_test_average = 0
-        for base_list in baseline_test:
-            for base_dict in base_list:
-                if type(base_dict['value']) is float:
-                    if "total" in base_dict['name']:
-                        baseline_test_average += base_dict['value']
-        # Comment needed
-        baseline_test_average = baseline_test_average/3
+        baseline_test_result = []
+        for plugin in active_plugins_list:
+            baseline_test_average = 0
+            for base_dict in profiler_plugins_baseline_results:
+                if "total" in base_dict['name'] and plugin is base_dict['parent'] and type(base_dict['value']) is float:
+                    baseline_test_average += base_dict['value']
+            temp_dict = {
+                'plugin': plugin,
+                'result': baseline_test_average/3
+            }
+            baseline_test_result.append(temp_dict)
 
         # Comment needed
-
         plugins_test_result = []
-
         for plugin in active_plugins_list:
             plugins_test_average = 0
-            for plug_dict in plugins_test:
+            for plug_dict in profiler_plugins_test_results:
                 if plug_dict['parent'] is plugin and type(plug_dict['value']) is float:
                     plugins_test_average += plug_dict['value']
             temp_dict = {
@@ -413,14 +413,18 @@ class WP_Profiler:
         # Here we sort the plugins_test_result
         plugins_test_result_sorted = sorted(plugins_test_result, key=itemgetter('result'), reverse=False)
 
+        # Here we print the generated table of results
         print("\n|{:<10}|{:<10}|{:<12}|{}".format('Baseline', 'Plugin', 'Difference', 'Plugin Name'))
-        for index, res_dict in enumerate(plugins_test_result_sorted):
+        for index in len(active_plugins_list):
             if index <= count:
-                baseline = baseline_test_average
-                plugin = res_dict['result']
-                difference = baseline_test_average - plugin
-                name = res_dict['plugin']
-                print("|{:.2f}s     |{:<.2f}s     |{:<.2f}s       |{}".format(baseline, plugin, difference, name))
+                for plugin_result in plugins_test_result_sorted:
+                    for base_result in baseline_test_result:
+                        if plugin_result['plugin'] is base_result['plugin']:
+                            base = base_result['result']
+                            plugin = plugin_result['result']
+                            difference = base_result['result'] - plugin_result['result']
+                            name = plugin_result['plugin']
+                            print("|{:.2f}s     |{:<.2f}s     |{:<.2f}s       |{}".format(base, plugin, difference, name))
 
 
 if __name__ == '__main__':
