@@ -7,9 +7,8 @@ from subprocess import PIPE
 from urllib import URLopener
 from operator import itemgetter
 
-class WP_Profiler:
 
-    #wp_cli_profiler_results = []
+class WP_Profiler:
 
     def __init__(self):
         self.wp_cli_download()
@@ -285,7 +284,7 @@ class WP_Profiler:
             print "    bootstrap  - loads the initial instructions and settings of the website"
             print "    template   - loads the layout of the website from the active theme on the website"
             print "    main_query - prepares the data for the requested page"
-            print "> [ \033[1;32;49mhook\033[1;37;49m ] - a function used by WP the core, a plugin or the theme of the website"
+            print "> [ \033[1;32;49mhook\033[1;37;49m ] - a function used by the WP core, a plugin or the theme of the website"
             print "-" * 50
 
             # First we print the stages that took longer than N seconds to load
@@ -361,6 +360,10 @@ class WP_Profiler:
         active_plugins_list = self.wp_cli_plugin_list_get()
 
         print("\n\033[1;33;49m---- WP CLI-Profiler plugin by plugin test ----\033[1;37;49m\n")
+
+        date = datetime.date.today()
+        time = datetime.datetime.now()
+        print "Test Starting Time: ", date.strftime("%b %d %Y"), time.strftime("%H:%M:%S"), "\n"
 
         # Here we run a test three times for each skipped plugin
         # This way we can later use the averages of these tests to make recommendations
@@ -452,22 +455,24 @@ class WP_Profiler:
 
 if __name__ == '__main__':
 
-    profiler_instance = WP_Profiler()
     print("\n\033[1;31;49m---- Running WP Cli Profiler ----\033[1;37;49m")
     try:
+        profiler_instance = WP_Profiler()
         profiler_instance.analytics_general(sys.argv[1:])
         profiler_instance.analytics_by_plugin(sys.argv[1:])
+        print "\n\033[1;31;49m---- Exiting ----\033[1;37;49m"
+        print "\n\033[1;31;49m---- Removing script files ----\033[1;37;49m\n"
         # We remove the script itself along with the wp-cli.phar file that was downloaded
         process = subprocess.Popen('rm -rf ./wpsp.py', stderr=PIPE, stdin=PIPE, stdout=PIPE, shell=True)
         process = subprocess.Popen('rm -rf ./wp-cli.phar', stderr=PIPE, stdin=PIPE, stdout=PIPE, shell=True)
     except KeyboardInterrupt:
-        print "\n\033[1;31;49m---- Exiting ----\033[1;37;49m\n"
+        print "\n\033[1;31;49m---- Script aborted ----\033[1;37;49m"
         print "\n\033[1;31;49m---- Removing script files ----\033[1;37;49m\n"
         # We remove the script itself along with the wp-cli.phar file that was downloaded
         process = subprocess.Popen('rm -rf ./wpsp.py', stderr=PIPE, stdin=PIPE, stdout=PIPE, shell=True)
         process = subprocess.Popen('rm -rf ./wp-cli.phar', stderr=PIPE, stdin=PIPE, stdout=PIPE, shell=True)
     except Exception as err:
-        print "\n\033[1;31;49m---- Script crashed ----\033[1;37;49m\n"
+        print "\n\033[1;31;49m---- Script crashed ----\033[1;37;49m"
         print "\n\033[1;31;49m---- Removing script files ----\033[1;37;49m\n"
         # We remove the script itself along with the wp-cli.phar file that was downloaded
         process = subprocess.Popen('rm -rf ./wpsp.py', stderr=PIPE, stdin=PIPE, stdout=PIPE, shell=True)
