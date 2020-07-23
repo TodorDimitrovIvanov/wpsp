@@ -2,7 +2,8 @@ import getopt
 import sys
 import subprocess
 import re
-from subprocess import Popen, PIPE
+import datetime
+from subprocess import PIPE
 from urllib import URLopener
 from operator import itemgetter
 
@@ -90,7 +91,7 @@ class WP_Profiler:
             value = dict.get('value')
             extra = dict.get('extra')
             if index <= result_count:
-                print("\t|{:<8}|{:<25}| {}".format(value, name, extra))
+                print("    |{:<8}|{:<25}| {}".format(value, name, extra))
 
     def profiler_result_print_single(self, result_list, target, **kwargs):
         # Comment needed
@@ -122,7 +123,7 @@ class WP_Profiler:
                     name = item.get('name')
                     value = item.get('value')
                     extra = item.get('extra')
-                    print("\t|{:<8}|{:<25}| {}".format(value, name, extra))
+                    print("    |{:<8}|{:<25}| {}".format(value, name, extra))
 
     def analytics_generate_loading_bar(self, count, total, status=''):
         # Code taken from here: https://gist.github.com/vladignatyev/06860ec2040cb497f0f3
@@ -170,10 +171,9 @@ class WP_Profiler:
 
         results_dict = []
 
-        # Comment needed
+        # Preparing a dict object which we return with the results from Profiler test
         for i in range(0, len(temp_list)-3, 3):
             if i >= 3 < len(temp_list) - 3:
-                # Comment needed
                 timing = re.sub('s', '', temp_list[i+1])
                 temp = {
                     'parent': '',
@@ -226,7 +226,8 @@ class WP_Profiler:
         profiler_stage_all = self.profiler_run("stage", "")
         results_stages_all = []
 
-        # Comment needed
+        # Here we start a test on all stages of the website
+        # If there any results that take longer than N seconds to load we save them in the 'results_stages_all' list
         for index, dict in enumerate(profiler_stage_all):
             if dict['value'] >= seconds:
                 results_stages_all.append(dict)
@@ -274,8 +275,19 @@ class WP_Profiler:
             # Otherwise we skip this part over
             # CODE NEEDED BELLOW!!!!!!!!!!!!!
 
+            print("\n\033[1;33;49m---- WP Cli-Profiler stage by stage test ----\033[1;37;49m\n")
+            date = datetime.date.today()
+            time = datetime.datetime.now()
+            print "Test Starting Time: ", date.strftime("%b %d %Y"), time.strftime("%H:%M:%S")
             # Here we print the results from the tests that we run above
-            print("\n\033[1;33;49m---- WP Cli-Profiler stage by stage test ----\033[1;37;49m")
+            print "Legend:"
+            print "> [ \033[1;31;49mstage\033[1;37;49m ] - a part of the the website's loading process"
+            print "    bootstrap  - loads the initial instructions and settings of the website"
+            print "    template   - loads the layout of the website from the active theme on the website"
+            print "    main_query - prepares the data for the requested page"
+            print "> [ \033[1;32;49mhook\033[1;37;49m ] - a function used by WP the core, a plugin or the theme of the website"
+            print "-" * 50
+
             # First we print the stages that took longer than N seconds to load
             print"\n> Stages that take longer than [", seconds, "] seconds to load:"
             self.profiler_result_print_multiple(results_stages_all, result_count=count)
@@ -286,14 +298,14 @@ class WP_Profiler:
                 if "total" not in stage['name']:
                     if "stage" not in stage['name']:
                         # Comment needed
-                        print"\n> Hooks within [\033[1;31;49m", stage['name'], "\033[1;37;49m] stage that take longer than [", seconds, "] seconds to load:"
+                        print"> [\033[1;33;49m WP Core\033[1;37;49m ][\033[1;31;49m", stage['name'], "\033[1;37;49m] hooks that take longer than [", seconds, "] seconds to load:"
                         self.profiler_result_print_by_parent(results_hooks_N, stage['name'], result_count=count)
 
                         for hook in results_hooks_N:
                             if "total" not in hook['name']:
                                 if hook['parent'] is stage['name'] and "hook" not in hook['name']:
                                     # Comment needed
-                                    print "\n> Callbacks within [\033[1;31;49m", hook['name'], "\033[1;37;49m] hook in [\033[1;31;49m", stage['name'], "\033[1;37;49m] stage that take longer than [", seconds, "] seconds to load:"
+                                    print "> [\033[1;33;49m WP Core\033[1;37;49m ][\033[1;31;49m", stage['name'], "\033[1;37;49m][\033[1;32;49m", hook['name'], "\033[1;37;49m] callbacks that take longer than [", seconds, "] seconds to load:"
                                     self.profiler_result_print_by_parent(results_callbacks_N, hook['name'], result_count=count)
                                     print "-" * 100
         else:
@@ -358,9 +370,15 @@ class WP_Profiler:
             message = "Testing [\033[1;31;49m" + plugin + "\033[1;37;49m] plugin."
             self.analytics_generate_loading_bar(index, len(active_plugins_list), message)
 
+
             # Here we prepare the command request that is passed to the Profiler
-            request = "--skip-plugins=" + plugin
-            profiler_plugin_result_list = self.profiler_run("stage", request)
+            profiler_plugin_result_list = []
+            for i in range(3):
+                request = "--skip-plugins=" + plugin
+                i = self.profiler_run("stage", request)
+                for element in i:
+                    if "total" in element['name']:
+                        profiler_plugin_result_list.append(element)
 
             # Here we run a baseline test three times so we can later on use the average
             # This is because the Profiler results are inconsistent due to something
@@ -384,47 +402,52 @@ class WP_Profiler:
                     profiler_plugins_test_results.append(element)
         self.analytics_generate_loading_bar(1, 1, "Done")
 
-        # Comment needed
+        # Here we process the results from the baseline tests
+        # This means that we combine the results from the three initial tests and divide it by three
         baseline_test_result = []
         for plugin in active_plugins_list:
             baseline_test_average = 0
             for base_dict in profiler_plugins_baseline_results:
                 if "total" in base_dict['name'] and plugin is base_dict['parent'] and type(base_dict['value']) is float:
                     baseline_test_average += base_dict['value']
+            # Generating a dict that stores the processed results
             temp_dict = {
                 'plugin': plugin,
                 'result': baseline_test_average/3
             }
+            # Saving the processed results
             baseline_test_result.append(temp_dict)
 
-        # Comment needed
+        # Here we process the results from the plugin tests
+        # This means that we combine the results from the three plugin tests and divide it by three
         plugins_test_result = []
         for plugin in active_plugins_list:
             plugins_test_average = 0
             for plug_dict in profiler_plugins_test_results:
                 if plug_dict['parent'] is plugin and type(plug_dict['value']) is float:
                     plugins_test_average += plug_dict['value']
+            # Generating a dict that stores the processed results
             temp_dict = {
                 'plugin': plugin,
                 'result': plugins_test_average/3
             }
+            # Saving the processed results
             plugins_test_result.append(temp_dict)
 
-        # Here we sort the plugins_test_result
+        # Here we sort the plugins_test_result list by the 'result' key
         plugins_test_result_sorted = sorted(plugins_test_result, key=itemgetter('result'), reverse=False)
 
         # Here we print the generated table of results
-        print("\n|{:<10}|{:<10}|{:<12}|{}".format('Baseline', 'Plugin', 'Difference', 'Plugin Name'))
-        for index in len(active_plugins_list):
-            if index <= count:
-                for plugin_result in plugins_test_result_sorted:
-                    for base_result in baseline_test_result:
-                        if plugin_result['plugin'] is base_result['plugin']:
-                            base = base_result['result']
-                            plugin = plugin_result['result']
-                            difference = base_result['result'] - plugin_result['result']
-                            name = plugin_result['plugin']
-                            print("|{:.2f}s     |{:<.2f}s     |{:<.2f}s       |{}".format(base, plugin, difference, name))
+        print("\n|{:<12}|{:<15}|{:<12}|{}".format('With Plugin', 'Without Plugin', 'Difference', 'Plugin Name'))
+
+        for plugin_result in plugins_test_result_sorted:
+            for base_result in baseline_test_result:
+                if plugin_result['plugin'] is base_result['plugin']:
+                    base = base_result['result']
+                    plugin = plugin_result['result']
+                    difference = base_result['result'] - plugin_result['result']
+                    name = plugin_result['plugin']
+                    print("|{:.2f}s       |{:<.2f}s          |{:<.2f}s       |{}".format(base, plugin, difference, name))
 
 
 if __name__ == '__main__':
@@ -434,12 +457,23 @@ if __name__ == '__main__':
     try:
         profiler_instance.analytics_general(sys.argv[1:])
         profiler_instance.analytics_by_plugin(sys.argv[1:])
+        # We remove the script itself along with the wp-cli.phar file that was downloaded
+        process = subprocess.Popen('rm -rf ./wpsp.py', stderr=PIPE, stdin=PIPE, stdout=PIPE, shell=True)
+        process = subprocess.Popen('rm -rf ./wp-cli.phar', stderr=PIPE, stdin=PIPE, stdout=PIPE, shell=True)
     except KeyboardInterrupt:
         print "\n\033[1;31;49m---- Exiting ----\033[1;37;49m\n"
         print "\n\033[1;31;49m---- Removing script files ----\033[1;37;49m\n"
         # We remove the script itself along with the wp-cli.phar file that was downloaded
         process = subprocess.Popen('rm -rf ./wpsp.py', stderr=PIPE, stdin=PIPE, stdout=PIPE, shell=True)
         process = subprocess.Popen('rm -rf ./wp-cli.phar', stderr=PIPE, stdin=PIPE, stdout=PIPE, shell=True)
+    except Exception as err:
+        print "\n\033[1;31;49m---- Script crashed ----\033[1;37;49m\n"
+        print "\n\033[1;31;49m---- Removing script files ----\033[1;37;49m\n"
+        # We remove the script itself along with the wp-cli.phar file that was downloaded
+        process = subprocess.Popen('rm -rf ./wpsp.py', stderr=PIPE, stdin=PIPE, stdout=PIPE, shell=True)
+        process = subprocess.Popen('rm -rf ./wp-cli.phar', stderr=PIPE, stdin=PIPE, stdout=PIPE, shell=True)
+        print "Error message: \n", sys.exc_info()[0], err
+
     # Here we handle exceptions
 
 
